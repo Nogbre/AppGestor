@@ -1,9 +1,9 @@
 import React, { useRef, useEffect, useState } from 'react';
-import {View,Text,StyleSheet,Animated,Dimensions,Image,TouchableOpacity,ScrollView,Modal,} from 'react-native';
-
+import { View, Text, StyleSheet, Animated, Dimensions, Image, TouchableOpacity, ScrollView, Modal } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { BarChart } from 'react-native-chart-kit';
-import { CameraView, useCameraPermissions } from 'expo-camera'; 
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
 const { height, width } = Dimensions.get('window');
@@ -14,16 +14,12 @@ export default function HomeScreen({ navigation }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [animComplete, setAnimComplete] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false);
-
-  const [graficoData, setGraficoData] = useState({
-    labels: [],
-    datasets: [{ data: [] }],
-  });
-
+  const [graficoData, setGraficoData] = useState({ labels: [], datasets: [{ data: [] }] });
   const [scannerVisible, setScannerVisible] = useState(false);
   const [scanned, setScanned] = useState(false);
+  const [insumosUso, setInsumosUso] = useState([]);
 
-  const [permission, requestPermission] = useCameraPermissions(); 
+  const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
 
   useEffect(() => {
@@ -46,20 +42,29 @@ export default function HomeScreen({ navigation }) {
       try {
         const response = await axios.get('https://universidad-la9h.onrender.com/top-docentes-laboratorios');
         const dataFromApi = response.data;
-
         const labels = dataFromApi.map(item => ` ${item.nombre_docente} `);
         const data = dataFromApi.map(item => item.total_laboratorios);
-
-        setGraficoData({
-          labels,
-          datasets: [{ data }],
-        });
+        setGraficoData({ labels, datasets: [{ data }] });
       } catch (error) {
         console.error('Error al cargar datos del gráfico:', error.message);
       }
     };
-
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const fetchInsumos = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('encargado');
+        const parsed = JSON.parse(stored);
+        if (!parsed?.id_encargado) return;
+        const res = await axios.get(`https://universidad-la9h.onrender.com/insumos-en-uso?id_encargado=${parsed.id_encargado}`);
+        setInsumosUso(res.data);
+      } catch (err) {
+        console.error("Error al cargar insumos en uso:", err.message);
+      }
+    };
+    fetchInsumos();
   }, []);
 
   const toggleMenu = () => {
@@ -75,15 +80,11 @@ export default function HomeScreen({ navigation }) {
   const handleBarCodeScanned = ({ type, data }) => {
     setScanned(true);
     setScannerVisible(false);
-
     const estanteria = data.trim();
     navigation.navigate('Ubicacion', { estanteria });
   };
 
-  if (!permission) {
-    return <View style={styles.container}><Text>Solicitando permisos...</Text></View>;
-  }
-
+  if (!permission) return <View style={styles.container}><Text>Solicitando permisos...</Text></View>;
   if (!permission.granted) {
     return (
       <View style={styles.container}>
@@ -97,18 +98,15 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        style={[styles.overlay, { transform: [{ translateY: slideAnim }] }]}>
+      <Animated.View style={[styles.overlay, { transform: [{ translateY: slideAnim }] }]}>
         {animComplete && (
           <View style={styles.logoContainer}>
             <Image source={require('../assets/logo-2.png')} style={styles.logo} />
           </View>
         )}
-
         <TouchableOpacity style={styles.navbar} onPress={toggleMenu}>
           <Text style={styles.navbarText}>HOME</Text>
         </TouchableOpacity>
-
         {menuAbierto && (
           <View style={styles.menuContentCentered}>
             <Text style={styles.menuText}>Laboratorios</Text>
@@ -122,7 +120,6 @@ export default function HomeScreen({ navigation }) {
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
         <View style={styles.contenedor_laboratorio_dashboard}>
           <Text style={styles.tituloGrafico}>Laboratorios hasta la fecha</Text>
-
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <BarChart
               data={graficoData}
@@ -147,10 +144,7 @@ export default function HomeScreen({ navigation }) {
                 },
               }}
               verticalLabelRotation={0}
-              style={{
-                marginVertical: 8,
-                borderRadius: 16,
-              }}
+              style={{ marginVertical: 8, borderRadius: 16 }}
               showBarTops
             />
           </ScrollView>
@@ -163,29 +157,41 @@ export default function HomeScreen({ navigation }) {
           <Icon style={styles.logo_qr} name="qrcode-scan" size={32} color="#000" />
           <Text style={styles.texto_boton}>Escanear QR</Text>
         </TouchableOpacity>
+
+        <View style={{ marginTop: 30, width: '100%', paddingHorizontal: 10 }}>
+          <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#592644', marginBottom: 10 }}>
+            Insumos en uso
+          </Text>
+          {insumosUso.length === 0 ? (
+            <Text style={{ color: '#666' }}>No hay insumos en uso.</Text>
+          ) : (
+            insumosUso.map((item) => (
+              <View key={`${item.id_solicitud}-${item.id_insumo}`} style={{
+                backgroundColor: '#fff',
+                borderRadius: 10,
+                padding: 10,
+                marginBottom: 10,
+                elevation: 3
+              }}>
+                <Text style={{ fontWeight: 'bold' }}>{item.insumo_nombre}</Text>
+                <Text>Cantidad total: {item.cantidad_total}</Text>
+                <Text>Laboratorio: {item.laboratorio_nombre}</Text>
+              </View>
+            ))
+          )}
+        </View>
       </Animated.View>
 
-      {/* Modal para escanear */}
       <Modal visible={scannerVisible} animationType="slide">
         <View style={{ flex: 1 }}>
           <CameraView
             ref={cameraRef}
             style={{ flex: 1 }}
-            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned} // OJO, cambia 'BarCodeScanned' por 'BarcodeScanned'
-            barcodeScannerSettings={{
-              barcodeTypes: ['qr'],
-            }}
+            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
           />
-
           <TouchableOpacity
-            style={{
-              position: 'absolute',
-              top: 50,
-              left: 20,
-              backgroundColor: '#fff',
-              padding: 10,
-              borderRadius: 10,
-            }}
+            style={{ position: 'absolute', top: 50, left: 20, backgroundColor: '#fff', padding: 10, borderRadius: 10 }}
             onPress={() => setScannerVisible(false)}
           >
             <Text>Cancelar</Text>
@@ -198,106 +204,34 @@ export default function HomeScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: height,
-    backgroundColor: '#592644',
-    zIndex: 10,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 20,
+    position: 'absolute', top: 0, left: 0, right: 0, height: height,
+    backgroundColor: '#592644', zIndex: 10, borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32, shadowColor: '#000', shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3, shadowRadius: 10, elevation: 20,
   },
-  logoContainer: {
-    position: 'absolute',
-    top: 60,
-    width: '100%',
-    alignItems: 'center',
-    zIndex: 11,
-  },
-  logo: {
-    marginTop: 60,
-    height: 170,
-    width: 170,
-  },
+  logoContainer: { position: 'absolute', top: 60, width: '100%', alignItems: 'center', zIndex: 11 },
+  logo: { marginTop: 60, height: 170, width: 170 },
   navbar: {
-    position: 'absolute',
-    bottom: 0,
-    height: NAVBAR_HEIGHT,
-    width: '100%',
-    backgroundColor: '#592644',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    position: 'absolute', bottom: 0, height: NAVBAR_HEIGHT, width: '100%',
+    backgroundColor: '#592644', justifyContent: 'center', alignItems: 'center',
+    borderBottomLeftRadius: 32, borderBottomRightRadius: 32,
   },
-  navbarText: {
-    marginTop: 50,
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#EAEAEA',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    zIndex: 1,
-    padding: 20,
-    alignItems: 'center',
-  },
+  navbarText: { marginTop: 50, color: 'white', fontSize: 18, fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: '#EAEAEA', justifyContent: 'center', alignItems: 'center' },
+  content: { zIndex: 1, padding: 20, alignItems: 'center' },
   contenedor_laboratorio_dashboard: {
-    backgroundColor: '#59264426',
-    marginTop: -40,
-    height: 320,
-    width: 340,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 10,
+    backgroundColor: '#59264426', marginTop: -40, height: 320, width: 340,
+    borderRadius: 24, justifyContent: 'center', alignItems: 'center', padding: 10,
   },
   boton_qr: {
-    backgroundColor: '#59264426',
-    borderRadius: 24,
-    marginTop: 30,
-    elevation: 6,
-    width: 340,
-    height: 70,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
+    backgroundColor: '#59264426', borderRadius: 24, marginTop: 30, elevation: 6,
+    width: 340, height: 70, justifyContent: 'center', alignItems: 'center', flexDirection: 'row',
   },
-  texto_boton: {
-    color: '#000',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 10,
-  },
-  tituloGrafico: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#592644',
-    marginBottom: 10,
-  },
+  texto_boton: { color: '#000', fontSize: 16, fontWeight: 'bold', marginLeft: 10 },
+  tituloGrafico: { fontSize: 18, fontWeight: 'bold', color: '#592644', marginBottom: 10 },
   menuContentCentered: {
-    position: 'absolute',
-    top: '50%',
-    left: 0,
-    right: 0,
-    transform: [{ translateY: -50 }],
-    alignItems: 'center',
+    position: 'absolute', top: '50%', left: 0, right: 0,
+    transform: [{ translateY: -50 }], alignItems: 'center',
   },
-  menuText: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginVertical: 10,
-    color: 'white',
-  },
+  menuText: { fontSize: 20, fontWeight: '600', marginVertical: 10, color: 'white' },
 });

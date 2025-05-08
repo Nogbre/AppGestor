@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useContext } from 'react';
 import {
   View,
   Text,
@@ -8,62 +8,104 @@ import {
   Animated,
   Dimensions,
   TouchableOpacity,
+  Alert,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import axios from 'axios';
+import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { height } = Dimensions.get('window');
 
-export default function LoginScreen({ navigation }) {
+export default function LoginScreen() {
   const expandAnim = useRef(new Animated.Value(305)).current;
+  const navigation = useNavigation();
 
-  const handleLogin = () => {
-    Animated.timing(expandAnim, {
-      toValue: height,
-      duration: 600,
-      useNativeDriver: false,
-    }).start(() => {
-      navigation.replace('Home');
-    });
+  const [correo, setCorreo] = useState('');
+  const [contrasena, setContrasena] = useState('');
+
+  const handleLogin = async () => {
+    if (!correo || !contrasena) {
+      return Alert.alert('Error', 'Por favor completa todos los campos.');
+    }
+
+    try {
+      const response = await axios.post('https://universidad-la9h.onrender.com/auth/encargado-login', {
+        correo,
+        contrasena,
+      });
+
+      const encargado = response.data;
+      await AsyncStorage.setItem('encargado', JSON.stringify(encargado));
+
+      Alert.alert('Bienvenido', 'Inicio de sesión exitoso.');
+
+      Animated.timing(expandAnim, {
+        toValue: height,
+        duration: 600,
+        useNativeDriver: false,
+      }).start(() => {
+        navigation.replace('Home');
+      });
+
+    } catch (error) {
+      if (error.response?.status === 401) {
+        Alert.alert('Datos erróneos', 'Correo o contraseña incorrectos.');
+      } else {
+        Alert.alert('Error', 'No se pudo conectar con el servidor.');
+      }
+    }
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header animado */}
-      <Animated.View style={[styles.header, { height: expandAnim }]}>
-        <Image source={require('../assets/logo-2.png')} style={styles.logo} />
-      </Animated.View>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <Animated.View style={[styles.header, { height: expandAnim }]}>
+          <Image source={require('../assets/logo-2.png')} style={styles.logo} />
+        </Animated.View>
 
-      {/* Formulario */}
-      <View style={styles.formContainer}>
-        <Text style={styles.titulo}>Laboratorios</Text>
-        <Text style={styles.titulo2}>Univalle</Text>
-        <Text style={styles.titulo3}>Iniciar Sesión</Text>
+        <View style={styles.formContainer}>
+          <Text style={styles.titulo}>Laboratorios</Text>
+          <Text style={styles.titulo2}>Univalle</Text>
+          <Text style={styles.titulo3}>Iniciar Sesión</Text>
 
-        <View style={styles.inputWrapper}>
-          <MaterialIcons name="email" size={24} color="#999" style={styles.inputIcon} />
-          <TextInput
-            style={styles.inputText}
-            placeholder="example@univalle.edu"
-            keyboardType="email-address"
-            placeholderTextColor="#999"
-          />
+          <View style={styles.inputWrapper}>
+            <MaterialIcons name="email" size={24} color="#999" style={styles.inputIcon} />
+            <TextInput
+              style={styles.inputText}
+              placeholder="example@univalle.edu"
+              keyboardType="email-address"
+              placeholderTextColor="#999"
+              value={correo}
+              onChangeText={setCorreo}
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputWrapper}>
+            <MaterialIcons name="lock" size={24} color="#999" style={styles.inputIcon} />
+            <TextInput
+              style={styles.inputText}
+              placeholder="contraseña"
+              secureTextEntry
+              placeholderTextColor="#999"
+              value={contrasena}
+              onChangeText={setContrasena}
+            />
+          </View>
+
+          <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+            <Text style={styles.loginButtonText}>INICIAR SESIÓN</Text>
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.inputWrapper}>
-          <MaterialIcons name="lock" size={24} color="#999" style={styles.inputIcon} />
-          <TextInput
-            style={styles.inputText}
-            placeholder="contraseña"
-            secureTextEntry
-            placeholderTextColor="#999"
-          />
-        </View>
-
-        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-          <Text style={styles.loginButtonText}>INICIAR SESIÓN</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
