@@ -80,7 +80,6 @@ export default function UbicacionScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Navbar animada */}
       <Animated.View style={[styles.overlay, { transform: [{ translateY: slideAnim }] }]}>
         {animComplete && (
           <View style={styles.logoContainer}>
@@ -102,13 +101,10 @@ export default function UbicacionScreen({ route, navigation }) {
         )}
       </Animated.View>
 
-      {/* Contenido principal */}
       {animComplete && (
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-          {/* Imagen de fondo */}
           <Image source={require('../assets/estanteria.png')} style={styles.estanteriaFondo} />
 
-          {/* Botones encima */}
           <View style={styles.botonesContainer}>
             {botones.map((numero) => (
               <TouchableOpacity
@@ -123,7 +119,6 @@ export default function UbicacionScreen({ route, navigation }) {
         </Animated.View>
       )}
 
-      {/* Modal No hay insumos */}
       <Modal visible={noInsumosModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -138,7 +133,6 @@ export default function UbicacionScreen({ route, navigation }) {
         </View>
       </Modal>
 
-      {/* Modal Hay insumos */}
       <Modal visible={insumosModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { height: 400 }]}>

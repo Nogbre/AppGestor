@@ -41,7 +41,7 @@ export default function LoginScreen() {
       const encargado = response.data;
       await AsyncStorage.setItem('encargado', JSON.stringify(encargado));
 
-      Alert.alert('Bienvenido', 'Inicio de sesión exitoso.');
+     
 
       Animated.timing(expandAnim, {
         toValue: height,
