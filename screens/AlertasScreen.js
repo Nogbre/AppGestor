@@ -163,7 +163,7 @@ const AlertasScreen = ({ navigation }) => {
                   <Text style={styles.bold}>Nombre:</Text> {alerta.insumo_nombre || "No disponible"}
                 </Text>
                 <Text style={styles.text}>
-                  <Text style={styles.bold}>Stock actual:</Text> {alerta.stock_actual}
+                  <Text style={styles.bold}>Disponibilidad actual:</Text> {alerta.stock_actual}
                 </Text>
                 <Text style={styles.text}>
                   <Text style={styles.bold}>Mínimo:</Text> {alerta.stock_minimo} | <Text style={styles.bold}>Máximo:</Text> {alerta.stock_maximo}
