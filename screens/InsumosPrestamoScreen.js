@@ -466,10 +466,6 @@ const InsumosPrestamoScreen = ({ navigation }) => {
                         </View>
                         <View style={styles.sectionContent}>
                           <View style={styles.detailRow}>
-                            <Text style={styles.modalLabel}>ID:</Text>
-                            <Text style={styles.modalValue}>#{selectedMovimiento.id_solicitud}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
                             <Text style={styles.modalLabel}>Responsable:</Text>
                             <Text style={styles.modalValue}>{selectedMovimiento.responsable}</Text>
                           </View>
