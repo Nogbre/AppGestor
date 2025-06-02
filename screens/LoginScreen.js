@@ -1,4 +1,4 @@
-import React, { useRef, useState, useContext } from 'react';
+import React, { useRef, useState, useContext, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,11 +21,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { height } = Dimensions.get('window');
 
 export default function LoginScreen() {
-  const expandAnim = useRef(new Animated.Value(305)).current;
+  const expandAnim = useRef(new Animated.Value(0)).current;
   const navigation = useNavigation();
 
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
+
+  useEffect(() => {
+    // Animación inicial que sube el header
+    Animated.timing(expandAnim, {
+      toValue: 305,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start();
+  }, []);
 
   const handleLogin = async () => {
     if (!correo || !contrasena) {
@@ -41,14 +50,14 @@ export default function LoginScreen() {
       const encargado = response.data;
       await AsyncStorage.setItem('encargado', JSON.stringify(encargado));
 
-     
-
+      // Primero bajamos el telón
       Animated.timing(expandAnim, {
         toValue: height,
-        duration: 600,
+        duration: 800,
         useNativeDriver: false,
       }).start(() => {
-        navigation.replace('Home');
+        // Navegamos a Home y el telón se subirá automáticamente
+        navigation.replace('Home', { fromLogin: true });
       });
 
     } catch (error) {

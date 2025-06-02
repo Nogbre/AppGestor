@@ -24,13 +24,16 @@ const InsumosPrestamoScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('PRESTAMO'); 
+  const [filterType, setFilterType] = useState('ALL');
   const [pagination, setPagination] = useState({
     page: 1,
     pageSize: 10,
     total: 0,
     totalPages: 1
   });
+  const [devolucionParcial, setDevolucionParcial] = useState({});
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [showDevolucionModal, setShowDevolucionModal] = useState(false);
 
   const fetchMovimientos = async (page = 1) => {
     try {
@@ -43,7 +46,7 @@ const InsumosPrestamoScreen = ({ navigation }) => {
       });
       
       setMovimientos(response.data.data);
-      setFilteredMovimientos(response.data.data.filter(m => m.tipo_movimiento === filterType));
+      setFilteredMovimientos(response.data.data);
       setPagination({
         page: response.data.paginacion.paginaActual,
         pageSize: response.data.paginacion.porPagina,
@@ -51,7 +54,7 @@ const InsumosPrestamoScreen = ({ navigation }) => {
         totalPages: response.data.paginacion.totalPaginas
       });
     } catch (error) {
-      console.error('Error fetching movements:', error);
+      console.error('Error al obtener movimientos:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -63,8 +66,11 @@ const InsumosPrestamoScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    let results = movimientos.filter(m => m.tipo_movimiento === filterType);
+    let results = movimientos;
     
+    if (filterType !== 'ALL') {
+      results = movimientos.filter(m => m.tipo_movimiento === filterType);
+    }
     
     if (searchTerm) {
       results = results.filter(m => 
@@ -80,6 +86,71 @@ const InsumosPrestamoScreen = ({ navigation }) => {
   const handleLoadMore = () => {
     if (pagination.page < pagination.totalPages) {
       fetchMovimientos(pagination.page + 1);
+    }
+  };
+
+  const handleCompletar = async (id) => {
+    try {
+      const response = await axios.get(`${API_URL}/solicitudes-uso/${id}`);
+      const data = response.data;
+
+      // Inicializar devolución parcial con todas las cantidades como devueltas
+      const inicialDevolucion = {};
+      data.insumos.forEach(insumo => {
+        inicialDevolucion[insumo.id_insumo] = insumo.cantidad_total;
+      });
+
+      setDevolucionParcial(inicialDevolucion);
+      setSelectedMovimiento(data);
+      setShowDevolucionModal(true);
+    } catch (error) {
+      console.error('Error obteniendo detalles:', error);
+      alert('Error al cargar los detalles de la solicitud');
+    }
+  };
+
+  const handleCantidadDevuelta = (insumoId, cantidad) => {
+    // Asegurarse que la cantidad esté entre 0 y el máximo disponible
+    const insumo = selectedMovimiento.insumos.find(i => i.id_insumo === insumoId);
+    const maxCantidad = insumo ? insumo.cantidad_total : 0;
+    const nuevaCantidad = Math.max(0, Math.min(parseInt(cantidad) || 0, maxCantidad));
+
+    setDevolucionParcial(prev => ({
+      ...prev,
+      [insumoId]: nuevaCantidad
+    }));
+  };
+
+  const calcularNoDevueltos = () => {
+    return selectedMovimiento.insumos.map(insumo => ({
+      id_insumo: insumo.id_insumo,
+      cantidad_no_devuelta: insumo.cantidad_total - (devolucionParcial[insumo.id_insumo] || 0)
+    })).filter(item => item.cantidad_no_devuelta > 0);
+  };
+
+  const confirmarDevolucionInsumos = async () => {
+    try {
+      setLoading(true);
+      const insumosNoDevueltos = calcularNoDevueltos();
+
+      const response = await axios.post(
+        `${API_URL}/solicitudes-uso/${selectedMovimiento.id_solicitud}/devolver`,
+        {
+          insumos_no_devueltos: insumosNoDevueltos
+        }
+      );
+
+      if (response.status === 200) {
+        alert(`Devolución registrada exitosamente!\nInsumos no devueltos: ${insumosNoDevueltos.length}`);
+        setShowDevolucionModal(false);
+        setDevolucionParcial({});
+        fetchMovimientos();
+      }
+    } catch (error) {
+      console.error('Error al confirmar devolución:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -99,9 +170,12 @@ const InsumosPrestamoScreen = ({ navigation }) => {
             {movimiento.tipo_movimiento === 'PRESTAMO' ? 'SALIDA' : 'ENTRADA'}
           </Text>
         </View>
-        <Text style={styles.cardQuantity}>
-          {movimiento.tipo_movimiento === 'PRESTAMO' ? '-' : '+'}{movimiento.cantidad}
-        </Text>
+        <View style={styles.quantityContainer}>
+          <Text style={styles.quantityLabel}>Cantidad</Text>
+          <Text style={styles.cardQuantity}>
+            {movimiento.tipo_movimiento === 'PRESTAMO' ? '-' : '+'}{movimiento.cantidad} {movimiento.unidad_medida}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.cardBody}>
@@ -109,28 +183,53 @@ const InsumosPrestamoScreen = ({ navigation }) => {
           {movimiento.insumo_nombre || 'Insumo no especificado'}
         </Text>
 
-        <View style={styles.infoRow}>
-          <Icon name="calendar" size={16} color="#fff" />
-          <Text style={styles.infoText}>
-            {new Date(movimiento.fecha_entregado).toLocaleDateString()}
-          </Text>
-        </View>
+        <View style={styles.infoGrid}>
+          <View style={styles.infoItem}>
+            <Icon name="calendar" size={16} color="#fff" />
+            <Text style={styles.infoText}>
+              {new Date(movimiento.fecha_entregado).toLocaleDateString()}
+            </Text>
+          </View>
 
-        <View style={styles.infoRow}>
-          <Icon name="file-document-outline" size={16} color="#fff" />
-          <Text style={styles.infoText}>Solicitud #{movimiento.id_solicitud}</Text>
+          <View style={styles.infoItem}>
+            <Icon name="clock-outline" size={16} color="#fff" />
+            <Text style={styles.infoText}>
+              {new Date(movimiento.fecha_entregado).toLocaleTimeString()}
+            </Text>
+          </View>
+
+          <View style={styles.infoItem}>
+            <Icon name="file-document-outline" size={16} color="#fff" />
+            <Text style={styles.infoText}>Solicitud #{movimiento.id_solicitud}</Text>
+          </View>
+
+          <View style={styles.infoItem}>
+            <Icon name="account" size={16} color="#fff" />
+            <Text style={styles.infoText}>{movimiento.responsable}</Text>
+          </View>
         </View>
       </View>
 
-      <TouchableOpacity
-        style={styles.detailsButton}
-        onPress={() => {
-          setSelectedMovimiento(movimiento);
-          setModalVisible(true);
-        }}
-      >
-        <Text style={styles.detailsButtonText}>Ver detalles</Text>
-      </TouchableOpacity>
+      <View style={styles.cardActions}>
+        <TouchableOpacity
+          style={styles.detailsButton}
+          onPress={() => {
+            setSelectedMovimiento(movimiento);
+            setModalVisible(true);
+          }}
+        >
+          <Text style={styles.detailsButtonText}>Ver detalles</Text>
+        </TouchableOpacity>
+
+        {movimiento.estado === 'Aprobada' && (
+          <TouchableOpacity
+            style={styles.completeButton}
+            onPress={() => handleCompletar(movimiento.id_solicitud)}
+          >
+            <Text style={styles.completeButtonText}>Completar</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 
@@ -173,6 +272,21 @@ const InsumosPrestamoScreen = ({ navigation }) => {
           </View>
           
           <View style={styles.typeFilterContainer}>
+            <TouchableOpacity
+              style={[
+                styles.typeFilterButton,
+                filterType === 'ALL' && styles.activeTypeFilter
+              ]}
+              onPress={() => setFilterType('ALL')}
+            >
+              <Text style={[
+                styles.typeFilterText,
+                filterType === 'ALL' && styles.activeTypeFilterText
+              ]}>
+                Todos
+              </Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[
                 styles.typeFilterButton,
@@ -237,75 +351,212 @@ const InsumosPrestamoScreen = ({ navigation }) => {
               <>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>
-                    Detalles del Movimiento
+                    {isCompleting ? "Control de Devolución de Insumos" : "Detalles del Movimiento"}
                   </Text>
-                  <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <TouchableOpacity 
+                    style={styles.closeButton}
+                    onPress={() => {
+                      setModalVisible(false);
+                      setDevolucionParcial({});
+                      setIsCompleting(false);
+                    }}
+                  >
                     <Icon name="close" size={24} color="#592644" />
                   </TouchableOpacity>
                 </View>
 
                 <ScrollView style={styles.modalContent}>
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Tipo de Movimiento:</Text>
-                    <View style={[
-                      styles.typeBadge,
-                      selectedMovimiento.tipo_movimiento === 'PRESTAMO' 
-                        ? styles.prestamoBadge 
-                        : styles.devolucionBadge
-                    ]}>
-                      <Text style={styles.typeBadgeText}>
-                        {selectedMovimiento.tipo_movimiento === 'PRESTAMO' ? 'SALIDA' : 'ENTRADA'}
+                  {isCompleting ? (
+                    <View style={styles.devolucionContainer}>
+                      <View style={styles.devolucionHeader}>
+                        <Text style={styles.devolucionTitle}>Insumos a Devolver</Text>
+                      </View>
+                      
+                      {selectedMovimiento.insumos?.map((insumo, idx) => (
+                        <View key={idx} style={styles.insumoRow}>
+                          <View style={styles.insumoInfo}>
+                            <Text style={styles.insumoNombre}>{insumo.insumo_nombre}</Text>
+                            <Text style={styles.insumoCantidad}>
+                              Total: {insumo.cantidad_total} {insumo.unidad_medida}
+                            </Text>
+                          </View>
+                          
+                          <View style={styles.devolucionInput}>
+                            <Text style={styles.devolucionLabel}>Devueltos:</Text>
+                            <TextInput
+                              style={styles.cantidadInput}
+                              keyboardType="numeric"
+                              value={devolucionParcial[insumo.id_insumo]?.toString() || '0'}
+                              onChangeText={(value) => handleCantidadDevuelta(insumo.id_insumo, value)}
+                            />
+                            <Text style={styles.noDevueltos}>
+                              No devueltos: {insumo.cantidad_total - (devolucionParcial[insumo.id_insumo] || 0)}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+
+                      <TouchableOpacity
+                        style={styles.confirmButton}
+                        onPress={confirmarDevolucionInsumos}
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <Text style={styles.confirmButtonText}>Confirmar Devolución</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View>
+                      <View style={styles.modalSection}>
+                        <View style={styles.sectionHeader}>
+                          <Icon 
+                            name={selectedMovimiento.tipo_movimiento === 'PRESTAMO' ? 'export' : 'import'} 
+                            size={20} 
+                            color="#592644" 
+                          />
+                          <Text style={styles.sectionTitle}>Información General</Text>
+                        </View>
+                        <View style={styles.sectionContent}>
+                          <View style={styles.detailRow}>
+                            <Text style={styles.modalLabel}>Tipo:</Text>
+                            <View style={[
+                              styles.estadoBadge, 
+                              selectedMovimiento.tipo_movimiento === 'PRESTAMO' ? styles.prestamoBadge : styles.devolucionBadge
+                            ]}>
+                              <Text style={styles.estadoText}>
+                                {selectedMovimiento.tipo_movimiento === 'PRESTAMO' ? 'SALIDA' : 'ENTRADA'}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.detailRow}>
+                            <Text style={styles.modalLabel}>Fecha:</Text>
+                            <Text style={styles.modalValue}>
+                              {new Date(selectedMovimiento.fecha_entregado).toLocaleString()}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.modalSection}>
+                        <View style={styles.sectionHeader}>
+                          <Icon name="package-variant" size={20} color="#592644" />
+                          <Text style={styles.sectionTitle}>Insumo</Text>
+                        </View>
+                        <View style={styles.sectionContent}>
+                          <View style={styles.detailRow}>
+                            <Text style={styles.modalLabel}>Nombre:</Text>
+                            <Text style={styles.modalValue}>{selectedMovimiento.insumo_nombre}</Text>
+                          </View>
+                          <View style={styles.detailRow}>
+                            <Text style={styles.modalLabel}>Cantidad:</Text>
+                            <Text style={styles.modalValue}>
+                              {selectedMovimiento.cantidad} {selectedMovimiento.unidad_medida}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.modalSection}>
+                        <View style={styles.sectionHeader}>
+                          <Icon name="file-document-outline" size={20} color="#592644" />
+                          <Text style={styles.sectionTitle}>Solicitud</Text>
+                        </View>
+                        <View style={styles.sectionContent}>
+                          <View style={styles.detailRow}>
+                            <Text style={styles.modalLabel}>ID:</Text>
+                            <Text style={styles.modalValue}>#{selectedMovimiento.id_solicitud}</Text>
+                          </View>
+                          <View style={styles.detailRow}>
+                            <Text style={styles.modalLabel}>Responsable:</Text>
+                            <Text style={styles.modalValue}>{selectedMovimiento.responsable}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de Devolución de Insumos */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showDevolucionModal}
+        onRequestClose={() => {
+          setShowDevolucionModal(false);
+          setDevolucionParcial({});
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Control de Devolución de Insumos</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => {
+                  setShowDevolucionModal(false);
+                  setDevolucionParcial({});
+                }}
+              >
+                <Icon name="close" size={24} color="#592644" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalContent}>
+              <View style={styles.devolucionContainer}>
+                <View style={styles.devolucionHeader}>
+                  <Text style={styles.devolucionSubtitle}>
+                    Solicitud #{selectedMovimiento?.id_solicitud}
+                  </Text>
+                  <Text style={styles.devolucionInfo}>
+                    Responsable: {selectedMovimiento?.responsable}
+                  </Text>
+                </View>
+                
+                {selectedMovimiento?.insumos?.map((insumo, idx) => (
+                  <View key={idx} style={styles.insumoRow}>
+                    <View style={styles.insumoInfo}>
+                      <Text style={styles.insumoNombre}>{insumo.insumo_nombre}</Text>
+                      <Text style={styles.insumoCantidad}>
+                        Total: {insumo.cantidad_total} {insumo.unidad_medida}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.devolucionInput}>
+                      <Text style={styles.devolucionLabel}>Devueltos:</Text>
+                      <TextInput
+                        style={styles.cantidadInput}
+                        keyboardType="numeric"
+                        value={devolucionParcial[insumo.id_insumo]?.toString() || '0'}
+                        onChangeText={(value) => handleCantidadDevuelta(insumo.id_insumo, value)}
+                      />
+                      <Text style={styles.noDevueltos}>
+                        No devueltos: {insumo.cantidad_total - (devolucionParcial[insumo.id_insumo] || 0)}
                       </Text>
                     </View>
                   </View>
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Insumo:</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedMovimiento.insumo_nombre || 'No especificado'}
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Cantidad:</Text>
-                    <Text style={[styles.detailValue, 
-                      selectedMovimiento.tipo_movimiento === 'PRESTAMO' 
-                        ? styles.negativeQuantity 
-                        : styles.positiveQuantity]}>
-                      {selectedMovimiento.tipo_movimiento === 'PRESTAMO' ? '-' : '+'}{selectedMovimiento.cantidad}
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Fecha de Movimiento:</Text>
-                    <Text style={styles.detailValue}>
-                      {new Date(selectedMovimiento.fecha_entregado).toLocaleString()}
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>ID Solicitud:</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedMovimiento.id_solicitud}
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Registrado por:</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedMovimiento.responsable || 'Sistema'}
-                    </Text>
-                  </View>
-                </ScrollView>
+                ))}
 
                 <TouchableOpacity
-                  style={styles.closeModalButton}
-                  onPress={() => setModalVisible(false)}
+                  style={styles.confirmButton}
+                  onPress={confirmarDevolucionInsumos}
+                  disabled={loading}
                 >
-                  <Text style={styles.closeModalButtonText}>Cerrar</Text>
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.confirmButtonText}>Confirmar Devolución</Text>
+                  )}
                 </TouchableOpacity>
-              </>
-            )}
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -405,159 +656,284 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   card: {
-    borderRadius: 10,
-    padding: 16,
+    backgroundColor: '#592644',
+    borderRadius: 12,
     marginBottom: 16,
+    overflow: 'hidden',
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
   },
   prestamoCard: {
-    backgroundColor: '#E53935', 
+    backgroundColor: '#592644',
   },
   devolucionCard: {
-    backgroundColor: '#43A047', 
+    backgroundColor: '#2E7D32',
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   typeIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  typeText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginLeft: 8,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 8,
-  },
-  cardQuantity: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
     backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderRadius: 20,
   },
+  typeText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  quantityContainer: {
+    alignItems: 'flex-end',
+  },
+  quantityLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  cardQuantity: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
   cardBody: {
+    padding: 16,
+  },
+  cardTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
     marginBottom: 12,
   },
-  infoRow: {
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    flex: 1,
+    minWidth: '45%',
   },
   infoText: {
-    fontSize: 14,
     color: '#fff',
-    marginLeft: 8,
-    opacity: 0.9,
+    marginLeft: 6,
+    fontSize: 12,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
   },
   detailsButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    padding: 10,
-    borderRadius: 6,
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    padding: 12,
+    alignItems: 'center',
+  },
+  completeButton: {
+    flex: 1,
+    backgroundColor: '#2E7D32',
+    padding: 12,
     alignItems: 'center',
   },
   detailsButtonText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  completeButtonText: {
+    color: '#fff',
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
   },
   modalContainer: {
     backgroundColor: 'white',
-    marginHorizontal: 20,
-    borderRadius: 10,
-    padding: 16,
+    borderRadius: 20,
+    width: '90%',
     maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-    paddingBottom: 8,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#592644',
-    flex: 1,
+  },
+  closeButton: {
+    padding: 5,
   },
   modalContent: {
-    marginBottom: 16,
+    padding: 20,
   },
-  detailSection: {
-    marginBottom: 16,
+  modalSection: {
+    marginBottom: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
-  detailLabel: {
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#592644',
+    marginLeft: 10,
+  },
+  sectionContent: {
+    padding: 15,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  modalValue: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 10,
+  },
+  estadoBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  prestamoBadge: {
+    backgroundColor: '#592644',
+  },
+  devolucionBadge: {
+    backgroundColor: '#2E7D32',
+  },
+  estadoText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  loadingMore: {
+    marginVertical: 10,
+  },
+  devolucionContainer: {
+    padding: 16,
+  },
+  devolucionHeader: {
+    marginBottom: 20,
+  },
+  devolucionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#592644',
+  },
+  insumoRow: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  insumoInfo: {
+    flex: 1,
+  },
+  insumoNombre: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  insumoCantidad: {
+    fontSize: 14,
+    color: '#666',
+  },
+  devolucionInput: {
+    alignItems: 'flex-end',
+  },
+  devolucionLabel: {
     fontSize: 14,
     color: '#666',
     marginBottom: 4,
   },
-  detailValue: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+  cantidadInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 8,
+    width: 80,
+    textAlign: 'center',
+    backgroundColor: '#fff',
   },
-  positiveQuantity: {
-    color: '#43A047',
-    fontWeight: 'bold',
-  },
-  negativeQuantity: {
-    color: '#E53935',
-    fontWeight: 'bold',
-  },
-  typeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+  noDevueltos: {
+    fontSize: 12,
+    color: '#dc3545',
     marginTop: 4,
   },
-  prestamoBadge: {
-    backgroundColor: '#E53935',
-  },
-  devolucionBadge: {
-    backgroundColor: '#43A047',
-  },
-  typeBadgeText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  closeModalButton: {
+  confirmButton: {
     backgroundColor: '#592644',
-    padding: 12,
-    borderRadius: 6,
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
+    marginTop: 20,
   },
-  closeModalButtonText: {
-    color: 'white',
+  confirmButtonText: {
+    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
-  loadingMore: {
-    marginVertical: 10,
+  devolucionSubtitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#592644',
+    marginBottom: 4,
+  },
+  devolucionInfo: {
+    fontSize: 14,
+    color: '#666',
   },
 });
 

@@ -222,71 +222,112 @@ const SolicitudesScreen = ({ navigation }) => {
               <>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Detalles de Solicitud</Text>
-                  <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <TouchableOpacity 
+                    style={styles.closeButton}
+                    onPress={() => setModalVisible(false)}
+                  >
                     <Icon name="close" size={24} color="#592644" />
                   </TouchableOpacity>
                 </View>
 
                 <ScrollView style={styles.modalContent}>
-                  <Text style={styles.modalText}>
-                    <Text style={styles.modalLabel}>ID:</Text> {selectedSolicitud.id_solicitud}
-                  </Text>
-                  <Text style={styles.modalText}>
-                    <Text style={styles.modalLabel}>Docente:</Text> {selectedSolicitud.docente_nombre}
-                  </Text>
-                  <Text style={styles.modalText}>
-                    <Text style={styles.modalLabel}>Práctica:</Text> {selectedSolicitud.practica_titulo || 'No especificado'}
-                  </Text>
-                  <Text style={styles.modalText}>
-                    <Text style={styles.modalLabel}>Laboratorio:</Text> {selectedSolicitud.laboratorio_nombre}
-                  </Text>
-                  <Text style={styles.modalText}>
-                    <Text style={styles.modalLabel}>Fecha Inicio:</Text> {new Date(selectedSolicitud.fecha_hora_inicio).toLocaleString()}
-                  </Text>
-                  <Text style={styles.modalText}>
-                    <Text style={styles.modalLabel}>Fecha Fin:</Text> {new Date(selectedSolicitud.fecha_hora_fin).toLocaleString()}
-                  </Text>
-                  <Text style={styles.modalText}>
-                    <Text style={styles.modalLabel}>Estado:</Text> {selectedSolicitud.estado}
-                  </Text>
-                  <Text style={styles.modalText}>
-                    <Text style={styles.modalLabel}>Estudiantes:</Text> {selectedSolicitud.numero_estudiantes}
-                  </Text>
-                  <Text style={styles.modalText}>
-                    <Text style={styles.modalLabel}>Grupos:</Text> {selectedSolicitud.numero_grupos}
-                  </Text>
-                  <Text style={styles.modalText}>
-                    <Text style={styles.modalLabel}>Tamaño grupo:</Text> {selectedSolicitud.tamano_grupo}
-                  </Text>
-
-                  <Text style={styles.sectionTitle}>Insumos requeridos:</Text>
-                  {selectedSolicitud.insumos?.length > 0 ? (
-                    selectedSolicitud.insumos.map((insumo, index) => (
-                      <View key={index} style={styles.insumoItem}>
-                        <Text style={styles.insumoName}>{insumo.insumo_nombre}</Text>
-                        <Text style={styles.insumoDetail}>Cantidad por grupo: {insumo.cantidad_por_grupo}</Text>
-                        <Text style={styles.insumoDetail}>Cantidad total: {insumo.cantidad_total}</Text>
-                        <Text style={styles.insumoDetail}>Unidad de medida: {insumo.unidad_medida}</Text>
+                  <View style={styles.modalSection}>
+                    <View style={styles.sectionHeader}>
+                      <Icon name="information" size={20} color="#592644" />
+                      <Text style={styles.sectionTitle}>Información General</Text>
+                    </View>
+                    <View style={styles.sectionContent}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.modalLabel}>Estado:</Text>
+                        <View style={[styles.estadoBadge, getEstadoStyle(selectedSolicitud.estado)]}>
+                          <Text style={styles.estadoText}>{selectedSolicitud.estado}</Text>
+                        </View>
                       </View>
-                    ))
-                  ) : (
-                    <Text style={styles.emptyText}>No hay insumos registrados</Text>
-                  )}
+                    </View>
+                  </View>
 
-                  {selectedSolicitud.observaciones && (
-                    <>
-                      <Text style={styles.sectionTitle}>Observaciones:</Text>
-                      <Text style={styles.observacionesText}>{selectedSolicitud.observaciones}</Text>
-                    </>
-                  )}
+                  <View style={styles.modalSection}>
+                    <View style={styles.sectionHeader}>
+                      <Icon name="account" size={20} color="#592644" />
+                      <Text style={styles.sectionTitle}>Docente</Text>
+                    </View>
+                    <View style={styles.sectionContent}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.modalLabel}>Nombre:</Text>
+                        <Text style={styles.modalValue}>{selectedSolicitud.docente_nombre}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.modalSection}>
+                    <View style={styles.sectionHeader}>
+                      <Icon name="flask" size={20} color="#592644" />
+                      <Text style={styles.sectionTitle}>Práctica</Text>
+                    </View>
+                    <View style={styles.sectionContent}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.modalLabel}>Título:</Text>
+                        <Text style={styles.modalValue}>{selectedSolicitud.practica_titulo || 'No especificado'}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.modalSection}>
+                    <View style={styles.sectionHeader}>
+                      <Icon name="office-building" size={20} color="#592644" />
+                      <Text style={styles.sectionTitle}>Laboratorio</Text>
+                    </View>
+                    <View style={styles.sectionContent}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.modalLabel}>Nombre:</Text>
+                        <Text style={styles.modalValue}>{selectedSolicitud.laboratorio_nombre}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.modalSection}>
+                    <View style={styles.sectionHeader}>
+                      <Icon name="clock-outline" size={20} color="#592644" />
+                      <Text style={styles.sectionTitle}>Horario</Text>
+                    </View>
+                    <View style={styles.sectionContent}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.modalLabel}>Inicio:</Text>
+                        <Text style={styles.modalValue}>{new Date(selectedSolicitud.fecha_hora_inicio).toLocaleString()}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.modalLabel}>Fin:</Text>
+                        <Text style={styles.modalValue}>{new Date(selectedSolicitud.fecha_hora_fin).toLocaleString()}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.modalSection}>
+                    <View style={styles.sectionHeader}>
+                      <Icon name="package-variant" size={20} color="#592644" />
+                      <Text style={styles.sectionTitle}>Insumos Requeridos</Text>
+                    </View>
+                    <View style={styles.sectionContent}>
+                      {selectedSolicitud.insumos?.length > 0 ? (
+                        selectedSolicitud.insumos.map((insumo, index) => (
+                          <View key={index} style={styles.insumoItem}>
+                            <Text style={styles.insumoName}>{insumo.insumo_nombre}</Text>
+                            <View style={styles.insumoDetails}>
+                              <Text style={styles.insumoDetail}>
+                                <Text style={styles.insumoLabel}>Cantidad por grupo:</Text> {insumo.cantidad_por_grupo} {insumo.unidad_medida}
+                              </Text>
+                              <Text style={styles.insumoDetail}>
+                                <Text style={styles.insumoLabel}>Cantidad total:</Text> {insumo.cantidad_total} {insumo.unidad_medida}
+                              </Text>
+                            </View>
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={styles.emptyText}>No hay insumos registrados</Text>
+                      )}
+                    </View>
+                  </View>
                 </ScrollView>
-
-                <TouchableOpacity 
-                  style={styles.closeModalButton}
-                  onPress={() => setModalVisible(false)}
-                >
-                  <Text style={styles.closeModalButtonText}>Cerrar</Text>
-                </TouchableOpacity>
               </>
             )}
           </View>
@@ -454,80 +495,111 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
   },
   modalContainer: {
     backgroundColor: 'white',
-    marginHorizontal: 20,
-    borderRadius: 8,
-    padding: 16,
+    borderRadius: 20,
+    width: '90%',
     maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#592644',
+  },
+  closeButton: {
+    padding: 5,
   },
   modalContent: {
-    marginBottom: 16,
-    maxHeight: '70%',
+    padding: 20,
   },
-  modalText: {
-    fontSize: 13,
-    color: '#333',
-    marginBottom: 6,
-    lineHeight: 18,
+  modalSection: {
+    marginBottom: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
-  modalLabel: {
-    fontWeight: '600',
-    color: '#592644',
-    fontSize: 13,
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#592644',
-    marginTop: 12,
-    marginBottom: 6,
+    marginLeft: 10,
+  },
+  sectionContent: {
+    padding: 15,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  modalValue: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 10,
   },
   insumoItem: {
-    backgroundColor: '#f9f9f9',
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 6,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
   },
   insumoName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: '#333',
+    marginBottom: 8,
+  },
+  insumoDetails: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 6,
+    padding: 8,
   },
   insumoDetail: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  observacionesText: {
     fontSize: 13,
-    color: '#333',
-    fontStyle: 'italic',
+    color: '#666',
+    marginBottom: 4,
   },
-  closeModalButton: {
-    backgroundColor: '#592644',
-    padding: 10,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  closeModalButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
+  insumoLabel: {
+    fontWeight: '500',
+    color: '#592644',
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,8 @@ import {
   RefreshControl,
   Dimensions,
   Modal,
-  Pressable
+  Pressable,
+  Animated
 } from 'react-native';
 import { BarChart, PieChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,10 +19,11 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Navbar from '../components/Navbar';
 import Card from '../components/Card';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const NAVBAR_HEIGHT = 80;
 
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation, route }) {
+  const expandAnim = useRef(new Animated.Value(0)).current;
   
   const [graficoData, setGraficoData] = useState({ labels: [], datasets: [{ data: [] }] });
   const [solicitudesPieData, setSolicitudesPieData] = useState([]);
@@ -50,7 +52,7 @@ export default function HomeScreen({ navigation }) {
         datasets: [{ data: graficoRes.data.map(item => item.total_laboratorios) }],
       });
 
-     
+      
       setInsumos(insumosRes.data);
       setTotalInsumos(insumosRes.data.length);
       const critico = insumosRes.data.filter(insumo => 
@@ -111,6 +113,16 @@ export default function HomeScreen({ navigation }) {
 
   useEffect(() => {
     fetchData();
+    
+    // Solo animamos si venimos del login
+    if (route.params?.fromLogin) {
+      expandAnim.setValue(height);
+      Animated.timing(expandAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: false,
+      }).start();
+    }
   }, []);
 
   const onRefresh = () => {
@@ -119,6 +131,7 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeContainer}>
+      <Animated.View style={[styles.telon, { height: expandAnim }]} />
       <Navbar navigation={navigation} />
       
       <ScrollView
@@ -287,5 +300,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#777',
     marginVertical: 20,
-  }
+  },
+  telon: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#592644',
+    zIndex: 999,
+  },
 });
